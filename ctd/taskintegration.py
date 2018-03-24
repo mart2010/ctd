@@ -5,16 +5,42 @@ import datetime
 import json
 import logging
 
-import crt
-import crt.service as service
+import ctd
+import ctd.service as service
 import luigi
 import os
+import requests
+
 from crt.taskbase import BaseBulkLoadTask, BasePostgresTask, batch_name
 from blockchain_parser.blockchain import Blockchain
 
 
 logger = logging.getLogger(__name__)
 
+
+class FetchExchangeData(luigi.Task):
+    """Fetch data from min-api.cryptocompare.com/data/
+    """
+    from_dt = luigi.DateHourParameter()
+    to_dt = luigi.DateHourParameter()
+    
+    def __init(self, *args, **kwargs):
+        super(FetchExchangeData, self).__init__(*args, **kwargs)
+        filename = "ExchangeHourCC_%s_%s.csv" % (self.from_dt.strftime(luigi.DateHourParameter.date_format,
+                                                 self.to_dt.strftime(luigi.DateHourParameter.date_format)))
+        self.dump_filepath = os.path.join(ctd.config.DATA_DOWNLOADED_DIR, filename)
+        
+    def output(self):
+        return luigi.LocalTarget(self.dump_filepath)
+
+    
+    def run(self):
+        # use the downlader code... to get json
+        
+        # dump the json into csv format...
+        
+        
+        
 
 
 class FetchNewBlockfiles(luigi.Task):
@@ -35,12 +61,7 @@ values (%s,%s,%s,%s,%s,%s,%s,%s,%s)
 
 class LoadBlockDataIntoStaging(BasePostgresTask):
     # blockfiles_path = luigi.Parameter()
-    
-        
-        
-    
-    
-    
+            
     def requires(self):
         return FetchNewBlockfiles()
     

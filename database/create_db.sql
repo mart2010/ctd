@@ -3,19 +3,19 @@
 
 
 -- As superuser, create role crt
-	create role crt with login password 'crt';
-	alter role crt CREATEROLE;
-	create database crt owner= crt;
+	create role ctd with login password 'ctd';
+	alter role ctd CREATEROLE;
+	create database ctd owner= ctd;
 
 -- As superuser, switch to new db and revoke privileges to other users */
-	\c crt
-	revoke connect on database crt from public;
+	\c ctd
+	revoke connect on database ctd from public;
 	revoke all on schema public from public;
-	grant all on schema public to crt;
+	grant all on schema public to ctd;
 
 
 -- used to backup database
-pg_dump -f crt_20180727.sql  --schema=staging --schema=integration -U crt  -p 54355 crt
+pg_dump -f ctd_20180727.sql  --schema=staging --schema=integration -U crt  -p 54355 crt
 
 --used to export table as flat files (for Redshift LOAD import)
 -- by default Null values are encoded as '\N' which is also the default used by Redshift LOAD command
