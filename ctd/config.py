@@ -17,3 +17,4 @@ DATABASE = {
 DATA_DOWNLOADED_DIR = "/Users/mart/Temp/ctd_download"
 DATA_ARCHIVE_DIR = "/Users/mart/Temp/ctd_archive"
 
+BLOCKCHAIN_DIR = "...."
