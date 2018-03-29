@@ -1,6 +1,3 @@
--- author = 'mart2010'
--- copyright = "Copyright 2018, The CRT Project"
-
 
 -------------------------------------- Data insertion -------------------------------------
 
@@ -33,10 +30,10 @@ where quote.ticker = 'USD'
 
 
 
-insert into itg.exchange_source
+insert into itg.data_source
 values
 (1, 'Bitstamp', 'Single Bitstamp source', 'http://')
-(2, 'Kanggle?'
+(2, 'CryptoCompare', 'Aggregator of different exchange', 'https://min-api.cryptocompare.com')
 (3, 'Dukascopy', 'Swiss market watch', 'http://')
 ;
 

@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-__author__ = 'mart2010'
-__copyright__ = "Copyright 2018, The CTD Project"
 
 
 DATABASE = {
@@ -17,4 +15,4 @@ DATABASE = {
 DATA_DOWNLOADED_DIR = "/Users/mart/Temp/ctd_download"
 DATA_ARCHIVE_DIR = "/Users/mart/Temp/ctd_archive"
 
-BLOCKCHAIN_DIR = "...."
+BLOCKCHAIN_DIR = "/dir/to-blk-files/"

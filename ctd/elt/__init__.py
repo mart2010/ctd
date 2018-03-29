@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import datetime
+import psycopg2
 
 
 class EltStepStatus():
@@ -94,6 +95,21 @@ class DbConnection(object):
 
     def __str__(self):
         return self.connection.__str__()
+
+# convenient fcts taken out from my DbConnection
+def insert_row_get_id(connection, insert, params=None):
+        """
+        Insert a single row while leaving open the transaction.
+        :return: the auto-generated id
+        """
+        if insert.rfind(";") == -1:
+            insert += ' RETURNING id;'
+        else:
+            insert = insert.replace(';', ' RETURNING id;')
+
+        with connection.cursor() as curs:
+            curs.execute(insert, params)
+            return curs.fetchone()[0]
 
 
 # Singleton Dbconnection on default database

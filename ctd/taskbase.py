@@ -14,7 +14,6 @@ def postgres_target(target_table, update_id):
     # TODO:  re-implement my own PostgresTarget to do :
     #  1) avoid exposing password
     #  2) leverage stating.load_audit as a "marker" table
-    #  3) ??
     return luigi.postgres.PostgresTarget(
             host        =crt.config.DATABASE['host'],
             database    =crt.config.DATABASE['database'],
@@ -24,6 +23,7 @@ def postgres_target(target_table, update_id):
             table       =target_table,
             update_id   =update_id)
 
+    
 class BasePostgresTask(luigi.Task):
     """
     Designed for subclass Task that updates (dml) DB target 
@@ -125,7 +125,7 @@ class BaseBulkLoadTask(luigi.postgres.CopyToTable):
             try:
                 header = fobj.next()
             # avoid executing downstream Task for empty file
-            except StopIteration, e:
+            except StopIteration as e:
                 raise ImportError("File empty, task %s is stopped" % self.task_id)
 
         if self.input_has_headers and header:

@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Wed Mar 21 10:16:27 2018
-
-@author: d7loz9
-"""
 
 import requests
 import datetime
