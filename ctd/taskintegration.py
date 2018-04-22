@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import glob
 import json
 import shutil
@@ -14,9 +16,6 @@ import requests
 
 from ctd.taskbase import BaseBulkLoadTask, BasePostgresTask, batch_name
 from blockchain_parser.blockchain import Blockchain
-
-
-
 
 
 
@@ -50,7 +49,7 @@ class FetchExchangeData(luigi.Task):
         
         
 ########################################################################################
-##### for loading BlockChain raw data in ctd DB (for now test with btc)
+##### for loading BlockChain raw data into DB (for now using btc)
 ########################################################################################
 
 # on pourrait inclure le paramètre "nb_blk_files" seulement à ce niveau et lancer la tache root avec ce param pour cette Tache.. voir guide
@@ -65,16 +64,20 @@ class GetBLKFilesToLoad(luigi.Task):
 
     def run(self):
         sql = "select max(height) from itg.block"
-        next_fileid = elt.get_ro_connection().fetch_one(sql) + 1
+        n = elt.get_ro_connection().fetch_one(sql)
+        if not n:
+            next_fileid = 1
+        else:
+            next_fileid =  n + 1
 
         all_files = sorted(glob.glob(config.BLOCKCHAIN_DIR + 'blk*.dat'))
-        toload_files = all_files[next_fileid:next_fileid+self.nb_blk_files] if self.nb_blk_files else all_files[next_fileid:]
+        files_toload = all_files[next_fileid:next_fileid+self.nb_blk_files] if self.nb_blk_files else all_files[next_fileid:]
 
         # TODO raise error if no blk files available to process
         # if ....:
         #    raise ctd.WorkflowError("No more blk files available, STOP PROCESSING!")
         
-        for f in toload_files:
+        for f in files_toload:
             shutil.copy2(f,self.output())
            
 
@@ -133,11 +136,11 @@ class LoadBLKFilesToStgTx(LoadBLKFilesToStgBase):
                 # index/pos of output is deducted (assumption: output in list outputs ordered correctly)
                 out_pos = 1
                 for txout in trans.outputs:
-                    row['txpout_pos'] = out_pos
+                    row['txout_pos'] = out_pos
                     row['txout_script_type'] = txout.type
-                    row['txpout_addresses_base58'] = [a.address for a in txout.addresses]
-                    row['txpout_publickeys'] = [a.publickey for a in txout.addresses]
-                    row['txpout_value'] = txout.value
+                    row['txout_addresses_base58'] = [a.address for a in txout.addresses]
+                    row['txout_publickeys'] = [a.publickey for a in txout.addresses]
+                    row['txout_value'] = txout.value
                     out_pos += 1
                     yield row
         
@@ -145,7 +148,7 @@ class LoadBLKFilesToStgTx(LoadBLKFilesToStgBase):
 class LoadBLKFilesToStgTxin(LoadBLKFilesToStgBase):
     table = 'stg.blk_data_txin'
     
-    def generate_rows(self, row):        
+    def generate_rows(self, row):
         for block in self.blockchain.get_unordered_blocks():
             row['blk_chain'] = 'btc'
             for trans in block.transactions:
@@ -247,7 +250,7 @@ class IntegrateTxOutData(BasePostgresTask):
     def execute_sql(self, cursor, audit_id):
         insert_sql = \
         """        
-        insert into {}(tx_id, tx_pos, value, script_type, load_daudit_id)
+        insert into {}(tx_id, tx_pos, value, script_type, load_audit_id)
         select i.tx_id
             , txout_pos
             , txout_value
@@ -272,17 +275,22 @@ class IntegrateTxOutAddressData(BasePostgresTask):
     def execute_sql(self, cursor, audit_id):
         insert_sql = \
         """        
-        insert into {}(txout_id, address_id, load_daudit_id)
-        select  TODO........
-            , %(audit_id)s
-        from stg.blk_tx_data s
-        join itg.tx i on (i.hash = s.tx_hash)
+        insert into {}(txout_id, address_id, load_audit_id)
+        select tx_adr.txout_id
+                , adr.address_id 
+                , %(audit_id)s
+        from 
+            (select  itxo.txout_id
+                    , unnest(txout_addresses_base58) as adrs
+            from stg.blk_tx_data s
+            join itg.tx itx on (itx.hash = s.tx_hash)
+            join itg.txout itxo on (itx.tx_id = itxo.tx_id and s.txout_pos = itxo.pos) as tx_adr
+        join itg.address adr on (tx_adr.adrs = adr.address_base58)        
         """.format(self.table)
         
         cursor.execute(insert_sql, {'audit_id': audit_id})
         return cursor.rowcount
 
-        
         
 # may have issue if executed with unordered blocks as the txout may not be present (not sure as txout is executed before.,, to validate)
 # if that's the case, should have an initial load where all blocks/tx/txout are loaded first
@@ -299,11 +307,10 @@ class IntegrateTxInData(BasePostgresTask):
         """        
         insert into {}(tx_id, tx_pos, txout_id, load_audit_id)
         select  i.tx_id
-                , txin_pos
+                , s.txin_pos
                 , txo.txout_id
-                , now()
                 , %(audit_id)s
-        from stg.blk_data_txin t
+        from stg.blk_data_txin s
         join itg.tx i on (i.hash = t.tx_hash)
         join (select t2.hash, t1.pos, t1.txout_id
               from itg.txout t1 join itg.tx t2 on (t1.tx_id = t2.tx_id) 

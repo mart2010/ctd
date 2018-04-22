@@ -11,7 +11,6 @@ def validate_time(t):
         raise ValueError("Exact hourly datetime expected")
 
 
-
 def fetch_hourly_data(pair, from_dt, to_dt):
     """fetch hour pair (ex. EUR/USD) trade data from from_dt to to_dt (exclusive)
     """
@@ -33,13 +32,12 @@ def fetch_hourly_data(pair, from_dt, to_dt):
     return ret
 
 
-    
-    
+       
     
     
 def http_get_data(url, as_json, **kvargs):
-    """ Generic HTTP GET call to url with params converted to well formed url query string
-    and return data in json or text
+    """ Generic HTTP GET call with params kvargs converted to well formed query string
+    Return data in json or text
     """   
     print(kvargs)
     try:     
@@ -50,8 +48,6 @@ def http_get_data(url, as_json, **kvargs):
         else:
             return r.text
     except requests.exceptions.RequestException as e:
-        print(e)
-    except Exception as e:
         print(e)
 
         

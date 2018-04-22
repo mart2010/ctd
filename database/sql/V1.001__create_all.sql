@@ -4,33 +4,23 @@ create schema stg;
 create schema itg;
 create schema pres;
 
+-------------------------------------- Clean-up all -------------------------------------
+drop schema stg CASCADE;
+drop schema itg CASCADE;
+drop schema pres CASCADE;
+
 
 ------------------------------------------ Staging layer -----------------------------------------------
 
-create table itg.load_audit (
-    id serial primary key,
-    batch_job text,
-    step_name text,
-    step_no integer,
-    status text,
-    run_dts timestamp,
-    elapse_sec integer,
-    rows_impacted integer,
-    output text
-);
-comment on table stg.load_audit is 'Metadata to report on running batch_job/steps';
-comment on column stg.load_audit.status is 'Status of step';
-comment on column stg.load_audit.run_dts is 'Timestamp when step run';
-comment on column stg.load_audit.output is 'Output produced by a step like error msg when failure or additional info';
 
+----------------------------- Exchange-type data ----------------------------
 
-
--- staging table for various initial-load files 
+-- staging table used to load Exchange-type data from various source/file 
 -- ex. btc kaggle file (https://www.kaggle.com/smitad/bitcoin-trading-strategy-simulation/data)
 create table stg.exchange_import(
 	begin_txt varchar(50),
-	begin_timestmp timestamp,
-	begin_epoch long,
+	begin_timestmp timestamp,		-- without time zone, so assume UTC by default
+	begin_epoch bigint,
 	end_timestmp timestamp,
 	pair varchar(30),
 	period_txt varchar(30),
@@ -46,14 +36,80 @@ create table stg.exchange_import(
 	time_standard varchar(30)
 );
 
+-- other? like blk-type data other table for useful metrics from bitstamp....
+-- ....
+
+
+---------------------------- Raw Blockchain-type data -----------------------
+
+
+-- includes tx AND txout (txout comes before txin, ... coinbase tx only generates txout)
+create table stg.blk_data_tx (
+	blk_chain text not null,   -- which crypto
+	blk_file text not null,
+    blk_hash char(64),
+    blk_prev_hash char(64),
+    blk_version integer,
+	blk_nb_tx integer,   -- nb of transaction (useful to validate DB # of relationship extracted vs Block.n_transaction)
+    blk_coinbase text,
+    blk_price integer,
+    blk_size integer,
+    blk_difficulty float,
+    blk_utc_timestmp timestamp,
+    blk_fees integer,
+    blk_height integer,
+    tx_hash char(64),
+	tx_is_coinbase boolean,
+	tx_use_rbf boolean,
+    tx_version integer,
+    tx_locktime integer,
+    tx_size integer,
+    tx_fee bigint,
+    tx_nb_inputs integer,
+    tx_nb_outputs integer,
+	txout_script_type varchar(20), 	 -- pubkeyhash, pubkey, p2sh, multisig, unknown, OP_RETURN
+    txout_pos integer,			 -- index of the output
+    txout_addresses_base58 char(58)[], -- in case of multisig, many addresses are possible for one txout!
+	txout_publickeys char(117)[],    -- TODO validate the len=117
+    txout_value bigint,			 -- in satoshis
+    loading_dts timestamp,
+    load_audit_id int
+);
+
+
+--seperate txin to avoid cartesian product with txout (one tx --> many txin, one tx --> many txout) 
+create table stg.blk_data_txin (
+	blk_chain text not null, -- which crypto
+    tx_hash char(64),
+	tx_nb_inputs integer,    -- for validation
+	txin_txout_hash char(64),   -- hash of transaction containing the output redeemed by this input
+	txin_txout_pos integer,     -- index of the output inside the transaction that is redeemed by this input
+	txin_pos integer,         	-- index of the input (the input's sequence number or position)	
+    loading_dts timestamp,
+    load_audit_id int
+);
+
 
 
 
 ------------------------------------------ Integration layer -------------------------------------------
 
-------------------------------------------------------------------------------------------
--------------------------------------- Raw Sub-layer -------------------------------------
-------------------------------------------------------------------------------------------
+create table itg.load_audit (
+    id serial primary key,
+    batch_job text,
+    step_name text,
+    step_no integer,
+    status text,
+    run_dts timestamp,
+    elapse_sec integer,
+    rows_impacted integer,
+    output text
+);
+comment on table itg.load_audit is 'Metadata to report on running batch_job/steps';
+comment on column itg.load_audit.status is 'Status of step';
+comment on column itg.load_audit.run_dts is 'Timestamp when step run';
+comment on column itg.load_audit.output is 'Output produced by a step like error msg when failure or additional info';
+
 
 create table itg.period (
 	period_id bigserial primary key,
@@ -71,7 +127,7 @@ create table itg.currency (
 	currency_id smallint primary key,
 	ticker varchar(10) unique not null,
 	name varchar(50),
-	type varchar(50)   -- fiat, crypto..
+	curr_type varchar(50)   -- fiat, crypto..
 );
 
 create table itg.currency_pair (
@@ -108,62 +164,13 @@ create table itg.exchange_rate (
 );
 
 
--- other table for useful metrics from bitstamp....
--- ....
 
 
--- includes tx and txout (txout comes before txin, ... coinbase tx only generates txout)
-create table stg.blk_data_tx (
-	blk_chain text not null,   -- which crypto
-	blk_file text not null,
-    blk_hash char(64),
-    blk_version integer,
-	blk_nb_tx integer,   -- nb of transaction (useful to validate DB # of relationship extracted vs Block.n_transaction)
-    blk_coinbase text,
-    blk_price integer,
-    blk_size integer,
-    blk_difficulty float,
-    blk_utc_timestmp timestamp,
-    blk_fees integer,
-    blk_height integer,
-    blk_prev_hash char(64)
-    tx_hash char(64),
-	tx_is_coinbase boolean,
-	tx_use_rbf boolean,
-    tx_version integer,
-    tx_locktime integer,
-    tx_size integer,
-    tx_fee bigint,
-    tx_nb_inputs integer,
-    tx_nb_outputs integer,
-	txout_script_type varchar(20), 	 -- pubkeyhash, pubkey, p2sh, multisig, unknown, OP_RETURN
-    txout_pos integer,			 -- index of the output
-    txout_addresses_base58 char(58)[], -- in case of multisig, many addresses are possible for one txout!
-	txout_publickeys char(117??)[],
-    txout_value bigint,			 -- in satoshis
-    loading_dts timestamp,
-    load_audit_id int
-);
-
-
---we seperate txin to avoid cartesian product with txout (one tx --> many txin, one tx --> many txout) 
-create table stg.blk_data_txin (
-	blk_chain text not null, -- which crypto
-    tx_hash char(64),
-	tx_nb_inputs integer,    -- for validation
-	txin_txout_hash char(64),   -- hash of transaction containing the output redeemed by this input
-	txin_txout_pos integer,     -- index of the output inside the transaction that is redeemed by this input
-	txin_pos integer,         	-- index of the input (the input's sequence number or position)	
-    loading_dts timestamp,
-    load_audit_id int
-);
-
-
--- BLOCKCHAIN-raw data
+-- Blockchain-data
 create table itg.block (
     block_id serial primary key,
     hash char(64) unique not null,
-    version integer not null
+    version integer not null,
     coinbase text not null,
     price integer,
     size integer not null,
@@ -198,6 +205,20 @@ create table itg.tx (
 comment on table itg.tx is '......';
 comment on column itg.size is '...';
 
+
+create table itg.txout (
+    txout_id bigserial primary key,
+    tx_id bigint not null,
+    tx_pos integer not null,
+    value bigint not null,
+	script_type text,
+    load_audit_id integer,
+    unique (tx_id, tx_pos),
+    foreign key (tx_id) references itg.tx(tx_id) on delete cascade
+);
+comment on table itg.txout is '...';
+comment on column itg.txout.tx_pos is '...';
+
 create table itg.txin (
     txin_id bigserial primary key,
     tx_id bigint not null,
@@ -212,20 +233,15 @@ comment on table itg.txin is '...';
 comment on column itg.txin.tx_pos is 'The sequence number or index of this tx input';
 comment on column itg.txin.txout_id is 'The transaction output id that is redeemed by this tx input';
 
-
-create table itg.txout (
-    txout_id bigserial primary key,
-    tx_id bigint not null,
-    tx_pos integer not null,
-    value bigint not null,
-	tx_type 
-    load_audit_id integer,
-    unique (tx_id, tx_pos),
-    foreign key (tx_id) references itg.tx(tx_id) on delete cascade,
-    foreign key (address_id) references itg.address(address_id) on delete cascade
+create table itg.address (
+    address_id bigserial primary key,
+    address_base58 char(58) not null, --address prefix '0', Pay-To-ScriptHash prefix '3'
+    --maybe store the compr/uncompr publickey as a way to indicate whether the address corresponds to which form...
+	publickey char(130),  --full uncompressed (X,Y data +prefix 04, 130Hex)...useful to recognize 2
+	--diff address from same PubKey..not sure it seems that other pk format is used for the other Address
+    load_audit_id int
 );
-comment on table itg.txout is '...';
-comment on column itg.txout.tx_pos is '...';
+comment on table itg.address is '....';
 
 
 create table itg.txout_address (
@@ -237,18 +253,9 @@ create table itg.txout_address (
 	foreign key (address_id) references itg.address(address_id)
 );
 
-comment on table itg.txout is 'Relationship between txout and address which is 1-to-many (only for multisig)';
+comment on table itg.txout is 'Relationship between txout and address which is 1-to-1, except for multisig which is 1-to-M';
 
 
-create table itg.address (
-    address_id bigserial primary key,
-    address_base58 char(58) not null, --address prefix '0', Pay-To-ScriptHash prefix '3'
-    --maybe store the compr/uncompr publickey as a way to indicate whether the address corresponds to which form...
-	publickey char(130),  --full uncompressed (X,Y data +prefix 04, 130Hex)...useful to recognize 2
-	--diff address from same PubKey..not sure it seems that other pk format is used for the other Address
-    load_audit_id int
-);
-comment on table itg.address is '....';
 
 
 

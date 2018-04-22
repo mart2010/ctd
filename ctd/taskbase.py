@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-__author__ = 'mart2010'
-__copyright__ = "Copyright 2016, The CRT Project"
-
-import crt
+import ctd
 import luigi
 from luigi import six
 
@@ -15,11 +12,11 @@ def postgres_target(target_table, update_id):
     #  1) avoid exposing password
     #  2) leverage stating.load_audit as a "marker" table
     return luigi.postgres.PostgresTarget(
-            host        =crt.config.DATABASE['host'],
-            database    =crt.config.DATABASE['database'],
-            user        =crt.config.DATABASE['user'],
-            password    =crt.config.DATABASE['password'],
-            port        =crt.config.DATABASE['port'],
+            host        =ctd.config.DATABASE['host'],
+            database    =ctd.config.DATABASE['database'],
+            user        =ctd.config.DATABASE['user'],
+            password    =ctd.config.DATABASE['password'],
+            port        =ctd.config.DATABASE['port'],
             table       =target_table,
             update_id   =update_id)
 
@@ -39,7 +36,7 @@ class BasePostgresTask(luigi.Task):
         cursor = connection.cursor()
 
         # decorate with audit-log stuff
-        self.audit_id, self.run_dts = crt.elt.insert_auditing(batch_name, self.task_id)
+        self.audit_id, self.run_dts = ctd.elt.insert_auditing(batch_name, self.task_id)
         self.rowscount = self.exec_sql(cursor, self.audit_id)
         cursor.close()
 
@@ -50,11 +47,11 @@ class BasePostgresTask(luigi.Task):
         connection.close()
 
     def on_success(self):
-        crt.elt.update_auditing(self.audit_id, crt.elt.EltStepStatus.COMPLETED,
+        ctd.elt.update_auditing(self.audit_id, ctd.elt.EltStepStatus.COMPLETED,
                                 run_dts=self.run_dts, rows=self.rowscount)
 
     def on_failure(self, exception):
-        crt.elt.update_auditing(self.audit_id, crt.elt.EltStepStatus.FAILED,
+        ctd.elt.update_auditing(self.audit_id, ctd.elt.EltStepStatus.FAILED,
                                 run_dts=self.run_dts, output=str(exception))
 
     def exec_sql(self, cursor, audit_id):
@@ -70,11 +67,11 @@ class BaseBulkLoadTask(luigi.postgres.CopyToTable):
     Should create a simple/clean implementation to avoid luigi's issue
     """
     # (cannot use postgre_target() as attributes set as abstractproperty in rdbms.CopyToTable)
-    host = crt.config.DATABASE['host']
-    database = crt.config.DATABASE['database']
-    user = crt.config.DATABASE['user']
-    password = crt.config.DATABASE['password']
-    port = crt.config.DATABASE['port']
+    host = ctd.config.DATABASE['host']
+    database = ctd.config.DATABASE['database']
+    user = ctd.config.DATABASE['user']
+    password = ctd.config.DATABASE['password']
+    port = ctd.config.DATABASE['port']
 
     clear_table_before = False
     # default separator
@@ -132,7 +129,7 @@ class BaseBulkLoadTask(luigi.postgres.CopyToTable):
             self.columns = header.strip('\n').split(self.column_separator)
 
         # decorate with audit-log stuff
-        self.audit_id, self.run_dts = crt.elt.insert_auditing(batch_name, self.task_id)
+        self.audit_id, self.run_dts = ctd.elt.insert_auditing(batch_name, self.task_id)
         super(BaseBulkLoadTask, self).run()
 
         
@@ -169,12 +166,12 @@ class BaseBulkLoadTask(luigi.postgres.CopyToTable):
 
     def on_success(self):
         if self.audit_id:
-            crt.elt.update_auditing(self.audit_id, crt.elt.EltStepStatus.COMPLETED,
+            ctd.elt.update_auditing(self.audit_id, ctd.elt.EltStepStatus.COMPLETED,
                                     run_dts=self.run_dts, rows=self.rowscount)
 
     def on_failure(self, exception):
         if self.audit_id:
-            crt.elt.update_auditing(self.audit_id, crt.elt.EltStepStatus.FAILED,
+            ctd.elt.update_auditing(self.audit_id, ctd.elt.EltStepStatus.FAILED,
                                     run_dts=self.run_dts, output=str(exception))
 
                                     

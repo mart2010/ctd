@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import datetime
 import psycopg2
+from ctd import config
 
 
 class EltStepStatus():
