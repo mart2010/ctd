@@ -5,7 +5,7 @@ DATABASE = {
     'host': 'localhost',
     # 'host': '192.168.0.28',
     'database': 'ctd',
-    'port': '54355',
+    'port': '5432',
     'user': 'ctd',
     'password': 'ctd'
 }
@@ -15,4 +15,4 @@ DATABASE = {
 DATA_DOWNLOADED_DIR = "/Users/mart/Temp/ctd_download"
 DATA_ARCHIVE_DIR = "/Users/mart/Temp/ctd_archive"
 
-BLOCKCHAIN_DIR = "/dir/to-blk-files/"
+BLOCKCHAIN_DIR = "./data_static/bitcoin_filesample/"

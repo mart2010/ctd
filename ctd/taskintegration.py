@@ -43,18 +43,16 @@ class FetchExchangeData(luigi.Task):
         # use the downlader code... to get json
         
         # dump the json into csv format...
-        
-        
-
+        pass
         
         
 ########################################################################################
 ##### for loading BlockChain raw data into DB (for now using btc)
 ########################################################################################
 
-# on pourrait inclure le paramètre "nb_blk_files" seulement à ce niveau et lancer la tache root avec ce param pour cette Tache.. voir guide
+# on pourrait inclure le paramètre "nb_blk_files" et lancer la tache root avec ce param pour cette Tache.. voir guide
 class GetBLKFilesToLoad(luigi.Task):
-    run_dts = luigi.DateMinuteParameter()
+    run_dts = luigi.DateMinuteParameter(default=datetime.datetime.now())
     nb_blk_files = luigi.IntParameter()
     
     # TODO: check if ok with path instead of file, check up-to which blk files ok to load (4-5 blocks to wait for confirmation)
@@ -65,10 +63,7 @@ class GetBLKFilesToLoad(luigi.Task):
     def run(self):
         sql = "select max(height) from itg.block"
         n = elt.get_ro_connection().fetch_one(sql)
-        if not n:
-            next_fileid = 1
-        else:
-            next_fileid =  n + 1
+        next_fileid = n + 1 if n else 1 
 
         all_files = sorted(glob.glob(config.BLOCKCHAIN_DIR + 'blk*.dat'))
         files_toload = all_files[next_fileid:next_fileid+self.nb_blk_files] if self.nb_blk_files else all_files[next_fileid:]
@@ -110,7 +105,9 @@ class LoadBLKFilesToStgBase(BasePostgresTask):
     def generate_rows(self, row):
         raise NotImplementedError
         
-            
+        
+# python -m luigi --module ctd.taskintegration LoadBLKFilesToStgTx --nb_blk_files 1 --local-scheduler
+        
 class LoadBLKFilesToStgTx(LoadBLKFilesToStgBase):
     table = 'stg.blk_data_tx'
    
@@ -128,8 +125,8 @@ class LoadBLKFilesToStgTx(LoadBLKFilesToStgBase):
             for trans in block.transactions:
                 row['tx_version'] = trans.version
                 row['tx_locktime'] = trans.locktime
-                row['tx_is_coinbase'] = trans.is_coinbase
-                row['tx_use_rbf'] = trans.use_replace_by_fee
+                row['tx_is_coinbase'] = trans.is_coinbase()
+                row['tx_use_rbf'] = trans.use_replace_by_fee()
                 row['tx_hash'] = trans.hash
                 row['tx_nb_inputs'] = trans.n_inputs
                 row['tx_nb_outputs'] = trans.n_outputs                
@@ -139,6 +136,7 @@ class LoadBLKFilesToStgTx(LoadBLKFilesToStgBase):
                     row['txout_pos'] = out_pos
                     row['txout_script_type'] = txout.type
                     row['txout_addresses_base58'] = [a.address for a in txout.addresses]
+                    row['txout_addresses_type'] = [a.type for a in txout.addresses]
                     row['txout_publickeys'] = [a.publickey for a in txout.addresses]
                     row['txout_value'] = txout.value
                     out_pos += 1

@@ -70,6 +70,7 @@ create table stg.blk_data_tx (
 	txout_script_type varchar(20), 	 -- pubkeyhash, pubkey, p2sh, multisig, unknown, OP_RETURN
     txout_pos integer,			 -- index of the output
     txout_addresses_base58 char(58)[], -- in case of multisig, many addresses are possible for one txout!
+    txout_addresses_type varchar(20)[], 
 	txout_publickeys char(117)[],    -- TODO validate the len=117
     txout_value bigint,			 -- in satoshis
     loading_dts timestamp,
