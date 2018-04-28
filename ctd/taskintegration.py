@@ -3,7 +3,6 @@
 import glob
 import json
 import shutil
-import logging
 import ctd.config as config
 import ctd.elt as elt
 import psycopg2
