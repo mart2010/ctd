@@ -1,23 +1,61 @@
 
 -------------------------------------- Schema creation -------------------------------------
-create schema stg;
+create schema ods;
 create schema itg;
-create schema pres;
+create schema dtm;
 
 -------------------------------------- Clean-up all -------------------------------------
-drop schema stg CASCADE;
+drop schema ods CASCADE;
 drop schema itg CASCADE;
 drop schema pres CASCADE;
 
 
------------------------------------------- Staging layer -----------------------------------------------
+
+------------------------------------------- Staging ODS ------------------------------------------------
+
+
+--------------------------------------------------------------------------------------------------------
+------------------------------------------- TEZOS stuff ------------------------------------------------
+--------------------------------------------------------------------------------------------------------
+
+create table ods.tz_explorer(
+	block_n bigint,
+	ops_type varchar(30),  --trx, origination, delegation. activation
+	status varchar(30).   --typically 'processed' but could request other like 'pending'
+	response_json json
+);
+
+
+-- issues with current explorer: can't query on specific timeperiod or block, making it difficult to implement incremental
+-- loading logic with one job ... to followup these explorer: tzscan.io, tezos.id, 
+comment on table ods.tzscan_trx is 'Tezos activity data loaded from tzscan.io block explorer';
+
+
+--volative staging for incremental loading to tezos itg trx -data
+-- could avoid this, by parsing the json from ods on-the-fly in SQL 
+create table ods.stg_tz_trx (
+	trx_hash varchar(60),  -- ooAnTjdtGPLJFpodJorYgiHPQMsLFJ9UqHCyMRzvdhDxnMJQp26
+	block_n bigint,
+	from_account varchar(40), --tz1MDKr36woXfVtrtXfV1ppPJERxPcm2wU6V
+	to_account varchar(40),
+	amount_txt text,
+	amount_tz real,
+	fee_txt text,
+	fee_mtz real
+);
+		
+
+
+
+
+
 
 
 ----------------------------- Exchange-type data ----------------------------
 
 -- staging table used to load Exchange-type data from various source/file 
 -- ex. btc kaggle file (https://www.kaggle.com/smitad/bitcoin-trading-strategy-simulation/data)
-create table stg.exchange_import(
+create table ods.exchange_import(
 	begin_txt varchar(50),
 	begin_timestmp timestamp,		-- without time zone, so assume UTC by default
 	begin_epoch bigint,
@@ -44,7 +82,7 @@ create table stg.exchange_import(
 
 
 -- includes tx AND txout (txout comes before txin, ... coinbase tx only generates txout)
-create table stg.blk_data_tx (
+create table ods.blk_data_tx (
 	blk_chain text not null,   -- which crypto
 	blk_file text not null,
     blk_hash char(64),
@@ -79,7 +117,7 @@ create table stg.blk_data_tx (
 
 
 --seperate txin to avoid cartesian product with txout (one tx --> many txin, one tx --> many txout) 
-create table stg.blk_data_txin (
+create table ods.blk_data_txin (
 	blk_chain text not null, -- which crypto
     tx_hash char(64),
 	tx_nb_inputs integer,    -- for validation
@@ -139,7 +177,7 @@ create table itg.currency_pair (
 	unique (base_currency_id, quote_currency_id)
 );
 
--- to convert unix timestamp (since epoch) to postgres timestamp : select to_timestamp(1195374767);
+-- to convert unix timestamp (since epoch) to poodsres timestamp : select to_timestamp(1195374767);
 -- To convert back to unix timestamp : select date_part('epoch',CURRENT_TIMESTAMP)::integer 
 
 -- source exchange used as source (ex. bitstamp, or exchanges with avg price index -coindesk, or website for historical data)
@@ -163,6 +201,7 @@ create table itg.exchange_rate (
 	foreign key (period_id) references itg.period(period_id),
 	foreign key (source_id) references itg.exchange_source(source_id)
 );
+
 
 
 
