@@ -1,16 +1,22 @@
 
 -- As superuser, create role crt
 	create role ctd with login password 'ctd';
+	create role airflow with login password 'airflow';
+
 	alter role ctd CREATEROLE;
-	create database ctd owner= ctd;
+	
+	create database ctd owner=ctd;
 
 -- As superuser, switch to new db and revoke privileges to other users */
 	\c ctd
 	revoke connect on database ctd from public;
 	revoke all on schema public from public;
 	grant all on schema public to ctd;
+	grant all on database ctd to airflow;
+
 
 
 -- used to backup database
 pg_dump -f ctd_20180727.sql  --schema=staging --schema=integration -U crt  -p 54355 crt
+
 

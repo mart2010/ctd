@@ -4,6 +4,11 @@ create schema ods;
 create schema itg;
 create schema dtm;
 
+create schema airflow;
+
+grant all on schema airflow to airflow;
+alter role airflow set search_path=airflow;
+
 -------------------------------------- Clean-up all -------------------------------------
 drop schema ods CASCADE;
 drop schema itg CASCADE;
@@ -18,10 +23,11 @@ drop schema pres CASCADE;
 ------------------------------------------- TEZOS stuff ------------------------------------------------
 --------------------------------------------------------------------------------------------------------
 
-create table ods.tz_explorer(
-	block_n bigint,
-	ops_type varchar(30),  --trx, origination, delegation. activation
-	status varchar(30).   --typically 'processed' but could request other like 'pending'
+create table ods.tz_data(
+	ops_hash varchar(60) unique,  -- operation hash
+	ops_kind varchar(30),  --transaction, origination, delegation. activation
+	op_level bigint,      --block_n level 
+	ops_timestamp timestamp,
 	response_json json
 );
 
@@ -32,18 +38,27 @@ comment on table ods.tzscan_trx is 'Tezos activity data loaded from tzscan.io bl
 
 
 --volative staging for incremental loading to tezos itg trx -data
--- could avoid this, by parsing the json from ods on-the-fly in SQL 
+-- could avoid this, by parsing the json from ods on-the-fly in SQL !!! YES
 create table ods.stg_tz_trx (
-	trx_hash varchar(60),  -- ooAnTjdtGPLJFpodJorYgiHPQMsLFJ9UqHCyMRzvdhDxnMJQp26
-	block_n bigint,
-	from_account varchar(40), --tz1MDKr36woXfVtrtXfV1ppPJERxPcm2wU6V
-	to_account varchar(40),
-	amount_txt text,
-	amount_tz real,
-	fee_txt text,
-	fee_mtz real
+	ops_hash text unique,  -- ooAnTjdtGPLJFpodJorYgiHPQMsLFJ9UqHCyMRzvdhDxnMJQp26
+	ops_level bigint,
+	ops_timestamp timestamp,
+	block_hash text,
+	network_hash text,
+	amount_mtz bigint,
+	fee_mtz bigint,
+	burn int, 
+	counter int,
+	failed boolean,
+	gaz_limit text,
+	internal boolean,
+	kind text,
+	storage_limit text,
+	source text, --tz1MDKr36woXfVtrtXfV1ppPJERxPcm2wU6V
+	destination text
 );
-		
+
+
 
 
 
