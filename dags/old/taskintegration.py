@@ -3,13 +3,11 @@
 import glob
 import json
 import shutil
-import ctd.config as config
 import ctd.elt as elt
 import psycopg2
 from psycopg2.extensions import AsIs
 import datetime
 
-import luigi
 import os
 import requests
 

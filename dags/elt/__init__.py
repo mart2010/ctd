@@ -1,11 +1,8 @@
-# -*- coding: utf-8 -*-
 import datetime
 import json
 import uuid
 import psycopg2
 import psycopg2.extras
-
-__author__ = 'mouellet'
 
 
 class DbConnection(object):

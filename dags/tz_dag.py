@@ -6,7 +6,10 @@ from airflow.operators.python_operator import PythonOperator
 # if task instance raises this, task transition to the Skipped status (for other exceptions, task are retry..)
 from airflow.exceptions import AirflowSkipException
 import requests
-import ctd.elt as elt
+import sys
+print("the path IS...\n")
+print(sys.path)
+import elt
 
 
 def http_get_data(url, as_json=True, **kwargs):
@@ -131,22 +134,22 @@ default_args = {
 }
 
 
-# with DAG('load_tz_data', catchup=False, 
-# 						 default_args=default_args, 
-# 						 schedule_interval='*/2 * * * *',) as dag:
+with DAG('load_tz_data', catchup=False, 
+						 default_args=default_args, 
+						 schedule_interval='*/2 * * * *',) as dag:
 
-# 	task_last_blockloaded = PythonOperator(task_id='last_blockloaded', 
-# 										   python_callable=last_blockloaded)
+	task_last_blockloaded = PythonOperator(task_id='last_blockloaded', 
+										   python_callable=last_blockloaded)
 
-# 	task_fetch_latest_data = PythonOperator(task_id='fetch_latest_data',
-# 											python_callable=fetch_latest_data,
-# 											provide_context=True)
-# 	task_load_trx_data = PythonOperator(task_id='load_trx_data',
-# 										python_callable=load_trx_data,
-# 										provide_context=True)
+	task_fetch_latest_data = PythonOperator(task_id='fetch_latest_data',
+											python_callable=fetch_latest_data,
+											provide_context=True)
+	task_load_trx_data = PythonOperator(task_id='load_trx_data',
+										python_callable=load_trx_data,
+										provide_context=True)
 
 
-# task_last_blockloaded >> task_fetch_latest_data >> task_load_trx_data
+task_last_blockloaded >> task_fetch_latest_data >> task_load_trx_data
 
 
 
