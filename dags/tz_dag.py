@@ -6,9 +6,6 @@ from airflow.operators.python_operator import PythonOperator
 # if task instance raises this, task transition to the Skipped status (for other exceptions, task are retry..)
 from airflow.exceptions import AirflowSkipException
 import requests
-import sys
-print("the path IS...\n")
-print(sys.path)
 import elt
 
 
