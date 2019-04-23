@@ -1,126 +1,126 @@
 from datetime import datetime
+import psycopg2 
 from airflow import DAG
 from airflow.operators.bash_operator import BashOperator
 from airflow.operators.python_operator import PythonOperator
-#from airflow.operators.postgres_operator import PostgresOperator
+from airflow.hooks.postgres_hook import PostgresHook
+from airflow.hooks.http_hook import HttpHook
+
 # if task instance raises this, task transition to the Skipped status (for other exceptions, task are retry..)
 from airflow.exceptions import AirflowSkipException
 import requests
-import elt
+import json
 
 
-def http_get_data(url, as_json=True, **kwargs):
-	""" Generic HTTP GET call with params kwargs converted to well formed query string
-	Return data in json or text
-	"""   
-	try:
-		r = requests.get(url, params=kwargs)
-		if as_json:
-			return r.json()
-		else:
-			return r.text
-	except requests.exceptions.RequestException as e:
-		print(e)
-		raise e
+TIME_FORMAT = "%Y-%m-%dT%H:%M:%S"
+
+# for now, just get rid of 'Z' timezone-spec
+def get_utc_timestamp(time_str):
+    t = time_str[:time_str.index('Z')]
+    return datetime.strptime(t, TIME_FORMAT)
 
 
-INITIAL_BLOCK_LEVEL = 398179
+def parse_utc_timetamp(trx_dic):
+    assert len(trx_dic['type']['operations']) == 1, 'Expected only one operation'
+    t_s = trx_dic['type']['operations'][0]['timestamp']
+    return get_utc_timestamp(t_s)
 
-def last_blockloaded(**kwargs):
-	return INITIAL_BLOCK_LEVEL
 
-	db_conn = elt.get_ro_connection()
-	ret = db_conn.fetch_one('select max(op_level) from ods.load_tz_data')
-	if not ret:
-		return INITIAL_BLOCK_LEVEL
-	else:
-		return ret[0]
+INITIAL_LOAD_UTC = "2019-04-23T20:20:00Z"
 
+def latest_loaded(**kwargs):
+    pg_hook = PostgresHook(postgres_conn_id='ctd')
+    ret = pg_hook.get_first('select max(ops_timestamp) from ods.tz_data;')
+    if not ret[0]:
+        return get_utc_timestamp(INITIAL_LOAD_UTC)
+    else:
+        return ret[0]
 
 # will return a list, like Check out why ops is a lit, could there be more than one for an ops hash?
-
-RET_PAGE_SIZE = 20
-
-def fetch_ops_data(ops_type, page_no):
-	"""Return list of dict element   
-	"""
-	return [ {'block_hash': 'BMUYC8xHkXh27uVohFJpW88itRzqoCQhqbmRuyb1VPLYzFScqnw',
-				'hash': 'opWg4UdvHhLWjBWtiWnHo7TnK9U8ScceBMACp1emnqJ8howEBbR',
-				'network_hash': 'NetXdQprcVkpaWU',
-				'type': {'kind': 'manager',
-				'operations': [{'amount': 1250000000,
-								'burn': 0,
-								'counter': 965461,
-								'destination': {'tz': 'tz1KtGwriE7VuLwT3LwuvU9Nv4wAxP7XZ57d'},
-								'failed': False,
-								'fee': 1420,
-								'gas_limit': '10300',
-								'internal': False,
-								'kind': 'transaction',
-								'op_level': 398182-page_no,
-								'src': {'tz': 'tz1RnP77bMxzvcX6xARWuFF2hvbh4TiPkgft'},
-								'storage_limit': '277',
-								'timestamp': '2019-04-16T14:38:24Z'}],
-				'source': {'tz': 'tz1RnP77bMxzvcX6xARWuFF2hvbh4TiPkgft'}}}]
-
-	assert ops_type in ('Transaction',)
-	page_no = page_no-1
-	# fetch from TZscan
-	return http_get_data('https://api6.tzscan.io/v3/operations', type=ops_type, p=page_no, number=RET_PAGE_SIZE)
+t = [{'block_hash': 'BMUYC8xHkXh27uVohFJpW88itRzqoCQhqbmRuyb1VPLYzFScqnw',
+             'hash': 'opWg4UdvHhLWjBWtiWnHo7TnK9U8ScceBMACp1emnqJ8howEBbR',
+             'network_hash': 'NetXdQprcVkpaWU',
+             'type': {'kind': 'manager',
+                      'operations': [{'amount': 1250000000,
+                                      'burn': 0,
+                                      'counter': 965461,
+                                      'destination': {'tz': 'tz1KtGwriE7VuLwT3LwuvU9Nv4wAxP7XZ57d'},
+                                      'failed': False,
+                                      'fee': 1420,
+                                      'gas_limit': '10300',
+                                      'internal': False,
+                                      'kind': 'transaction',
+                                      'op_level': 398182,
+                                      'src': {'tz': 'tz1RnP77bMxzvcX6xARWuFF2hvbh4TiPkgft'},
+                                      'storage_limit': '277',
+                                      'timestamp': '2019-04-16T14:38:24Z'}],
+                      'source': {'tz': 'tz1RnP77bMxzvcX6xARWuFF2hvbh4TiPkgft'}}}]
 
 
-def check_and_get_minblock(trx_list):
-	min_op_level = trx_list[0]['type']['operations'][0]['op_level']
-	for t in trx_list:
-		assert len(t['type']['operations']) == 1
-		if t['type']['operations'][0]['op_level'] < min_op_level:
-			min_op_level = t['type']['operations'][0]['op_level']
-	return min_op_level
+
+PAGE_SIZE = 20
+
+def get_tzapi_data(ops_type, page_offset, page_size=PAGE_SIZE):
+    """Return list of ops from TZscan
+    """
+    assert ops_type in ('Transaction', 'Origination', 'Delegation', 'Activation', '??')
+    api_hook = HttpHook(http_conn_id='http_tzscan', method='GET')
+    resp = api_hook.run(endpoint='v3/operations', data=dict(type=ops_type, status='Processed', p=page_offset, number=page_size))
+    return resp.json()
+    # do not need json ... return json.loads(resp.content)
 
 
 def fetch_latest_data(**kwargs):
-	ti = kwargs['ti']
-	last_loaded_inDB = ti.xcom_pull(key=None, task_id='last_blockloaded')
+    ti = kwargs['ti']
+    oldest_inDB = ti.xcom_pull(key=None, task_ids='latest_loaded')
 
-	already_loaded = False
-	no = 1
-	trx_data = []
-	while not already_loaded:
-		t_l = fetch_ops_data(ops_type="Transaction", page_no=no)
-		trx_data += t_l
-		no += 1
-		min_block_inPage = check_and_get_minblock(t_l)
-		if last_loaded_inDB > min_block_inPage:
-			already_loaded = True
-		else:
-			print("Must request page %s, increase 'RET_PAGE_SIZE to limit number of HTTP requests" \
-				  "(min block in page=%s, last block in DB=%s)".format(no, min_block_inPage, last_loaded_inDB ))
-	return trx_data
+    p_offset = 0
+    trx_data = []
+    found = False
+    while not found:
+        trx_in_page = get_tzapi_data(ops_type="Transaction", page_offset=p_offset)
+        for i, t in enumerate(trx_in_page):
+            t_timestamp = parse_utc_timetamp(t)
+            if i+1 < len(trx_in_page):
+                assert t_timestamp >= parse_utc_timetamp(trx_in_page[i+1]), 'Expected time-ordered trx'
+            if t_timestamp >= oldest_inDB:
+                trx_data.append(t)
+            else:
+                found = True
+                break
+        p_offset += 1
+        print("Scan page-{} (n.Trx={}, oldestScanTrx={}, oldestinDB={})".format(p_offset, len(trx_data), t_timestamp, oldest_inDB))
+    return trx_data
 
 
 def load_trx_data(**kwargs):
-	sql = """"insert into ods.tz_data(ops_hash, ops_kind, op_level, ops_timestamp)
-			  values (%(hash)s, %(kind)s, %(level)s, %(tstmp)s)"""
+    ti = kwargs['ti']
+    trx_data = ti.xcom_pull(key=None, task_ids='fetch_latest_data')
 
-	ti = kwargs['ti']
-	trx_data = ti.xcom_pull(key=None, task_id='fetch_latest_data')
+    # insert into DB
+    ins_sql = """insert into ods.tz_data(ops_hash, ops_kind, op_level, ops_timestamp, response_json)
+                  values (%s, %s, %s, %s, %s);"""
+    pg_hook = PostgresHook(postgres_conn_id='ctd')
 
-	db_conn = elt.get_connection()
-	# insert into ps DB, and ignore duplicate hash error (expecting a few, maybe report them) 
-	for t in trx_data:
-		try:
-			db_conn.execute(sql, params={'hash': t['hash'], 
-										 'kind': t['operations'][0]['kind'],
-										 'level': t['operations'][0]['op_level'],
-										 'tstmp': t['operations'][0]['timestamp']})
-		except "UniqueKeyViolation" as e:
-			print("ignore trx loaded previously")
-	db_conn.commit()
+    for i, t in enumerate(trx_data):
+        t_timestamp = get_utc_timestamp(t['type']['operations'][0]['timestamp'])
+        try:
+            pg_hook.run(ins_sql,parameters=(t['hash'], 
+                                            t['type']['operations'][0]['kind'],
+                                            t['type']['operations'][0]['op_level'],
+                                            t_timestamp,
+                                            json.dumps(t)))
+        except psycopg2.Error as e:
+            if e.pgcode == '23505':    #unique violation
+                latest_inDB = ti.xcom_pull(key=None, task_ids='latest_loaded')
+                print("{}-th trx (hash={}, timestamp={} already in DB (latest-inDB={}".format(i, t['hash'], t_timestamp, latest_inDB))
+            else:
+                raise e
 
 
 default_args = {
     'owner': 'airflow',
-    'start_date': datetime(2019, 4, 15, 13, 00, 00),
+    'start_date': datetime(2019, 4, 23, 20, 00, 00),
     'concurrency': 1,
     'retries': 0
     # 'retry_delay': timedelta(seconds=5)
@@ -131,22 +131,20 @@ default_args = {
 }
 
 
-with DAG('load_tz_data', catchup=False, 
-						 default_args=default_args, 
-						 schedule_interval='*/2 * * * *',) as dag:
+with DAG('load_tz_data', catchup=False,
+         default_args=default_args,
+         schedule_interval='*/2 * * * *',) as dag:
 
-	task_last_blockloaded = PythonOperator(task_id='last_blockloaded', 
-										   python_callable=last_blockloaded)
+    task_latest_loaded = PythonOperator(task_id='latest_loaded',
+                                        python_callable=latest_loaded)
 
-	task_fetch_latest_data = PythonOperator(task_id='fetch_latest_data',
-											python_callable=fetch_latest_data,
-											provide_context=True)
-	task_load_trx_data = PythonOperator(task_id='load_trx_data',
-										python_callable=load_trx_data,
-										provide_context=True)
+    task_fetch_latest_data = PythonOperator(task_id='fetch_latest_data',
+                                            python_callable=fetch_latest_data,
+                                            provide_context=True)
 
-
-task_last_blockloaded >> task_fetch_latest_data >> task_load_trx_data
+    task_load_trx_data = PythonOperator(task_id='load_trx_data',
+                                        python_callable=load_trx_data,
+                                        provide_context=True)
 
 
-
+task_latest_loaded >> task_fetch_latest_data >> task_load_trx_data

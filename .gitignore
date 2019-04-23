@@ -46,4 +46,4 @@ pip-delete-this-directory.txt
 
 # airflow stuff
 airflow-webserver.pid
-ctd/airflow_logs/
+airflow_logs/

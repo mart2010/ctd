@@ -8,6 +8,7 @@ create schema airflow;
 
 grant all on schema airflow to airflow;
 alter role airflow set search_path=airflow;
+alter role ctd set search_path=ods,itg,dtm;
 
 -------------------------------------- Clean-up all -------------------------------------
 drop schema ods CASCADE;
@@ -57,11 +58,6 @@ create table ods.stg_tz_trx (
 	source text, --tz1MDKr36woXfVtrtXfV1ppPJERxPcm2wU6V
 	destination text
 );
-
-
-
-
-
 
 
 
