@@ -26,8 +26,7 @@ drop schema pres CASCADE;
 
 create table ods.tz_data(
 	ops_hash varchar(60) unique,  -- operation hash
-	ops_kind varchar(30),  --transaction, origination, delegation. activation
-	op_level bigint,      --block_n level 
+	ops_type varchar(30),  --different API for: transaction, origination, delegation, activation
 	ops_timestamp timestamp,
 	response_json json
 );
@@ -58,8 +57,6 @@ create table ods.stg_tz_trx (
 	source text, --tz1MDKr36woXfVtrtXfV1ppPJERxPcm2wU6V
 	destination text
 );
-
-
 
 
 ----------------------------- Exchange-type data ----------------------------

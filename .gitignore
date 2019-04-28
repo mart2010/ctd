@@ -5,6 +5,7 @@ errors_fix.txt
 comments.txt
 data_static/
 log/
+*.log
 ~/
 
 # Byte-compiled / optimized / DLL files
@@ -46,4 +47,5 @@ pip-delete-this-directory.txt
 
 # airflow stuff
 airflow-webserver.pid
-airflow_logs/
+dags/airflow_logs/
+ctd.sublime-workspace
